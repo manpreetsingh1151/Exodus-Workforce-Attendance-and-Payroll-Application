@@ -1,6 +1,14 @@
 "use client";
+import React, { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
+// import Papa from "papaparse";
+import * as XLSX from "xlsx";
+import { useRouter } from "next/navigation";
 
-import React, { useMemo, useState } from "react";
+function getFullName(employee: Employee): string {
+  return `${employee.firstName} ${employee.lastName}`.trim();
+}
+
 import {
   CalendarDays,
   Clock,
@@ -75,9 +83,14 @@ function downloadCSV(
 }
 
 interface Employee {
-  id: number;
-  name: string;
+  id: string;
+  firstName: string;
+  lastName: string;
+  employeeType: string;
+  employer: string;
+  gender: string;
   license: string;
+  licenseExpiration: string;
   phone: string;
   email: string;
   hourlyRate: number;
@@ -89,13 +102,13 @@ interface EventItem {
   date: string;
   location: string;
   status: "upcoming" | "current" | "past";
-  scheduledGuardIds: number[];
+  scheduledGuardIds: string[];
 }
 
 interface TimeEntry {
   id: number;
   eventId: number;
-  employeeId: number;
+  employeeId: string;
   clockIn: string | null;
   clockOut: string | null;
 }
@@ -112,32 +125,32 @@ type PayrollRow = {
   payout: number;
 };
 
-const initialEmployees: Employee[] = [
-  {
-    id: 1,
-    name: "Varun Bhanot",
-    license: "11151199",
-    phone: "416-555-0101",
-    email: "varun@example.com",
-    hourlyRate: 25,
-  },
-  {
-    id: 2,
-    name: "Kyle Johnson",
-    license: "11153510",
-    phone: "647-555-0155",
-    email: "kyle@example.com",
-    hourlyRate: 27,
-  },
-  {
-    id: 3,
-    name: "Saurav Whalla",
-    license: "11468460",
-    phone: "905-555-0198",
-    email: "saurav@example.com",
-    hourlyRate: 25,
-  },
-];
+// const initialEmployees: Employee[] = [
+//   {
+//     id: 1,
+//     name: "Varun Bhanot",
+//     license: "11151199",
+//     phone: "416-555-0101",
+//     email: "varun@example.com",
+//     hourlyRate: 25,
+//   },
+//   {
+//     id: 2,
+//     name: "Kyle Johnson",
+//     license: "11153510",
+//     phone: "647-555-0155",
+//     email: "kyle@example.com",
+//     hourlyRate: 27,
+//   },
+//   {
+//     id: 3,
+//     name: "Saurav Whalla",
+//     license: "11468460",
+//     phone: "905-555-0198",
+//     email: "saurav@example.com",
+//     hourlyRate: 25,
+//   },
+// ];
 
 const initialEvents: EventItem[] = [
   {
@@ -146,7 +159,7 @@ const initialEvents: EventItem[] = [
     date: "2026-06-28",
     location: "105 Carl Hall Rd, North York",
     status: "upcoming",
-    scheduledGuardIds: [1, 2, 3],
+    scheduledGuardIds: ["1", "2", "3"],
   },
   {
     id: 102,
@@ -154,7 +167,7 @@ const initialEvents: EventItem[] = [
     date: "2026-06-24",
     location: "660 Fleet Street, Toronto",
     status: "current",
-    scheduledGuardIds: [1, 3],
+    scheduledGuardIds: ["1", "3"],
   },
   {
     id: 103,
@@ -162,19 +175,11 @@ const initialEvents: EventItem[] = [
     date: "2026-06-21",
     location: "Toronto, ON",
     status: "past",
-    scheduledGuardIds: [2],
+    scheduledGuardIds: ["2"],
   },
 ];
 
-const initialTimeEntries: TimeEntry[] = [
-  {
-    id: 1001,
-    eventId: 103,
-    employeeId: 2,
-    clockIn: "2026-06-21T16:00:00",
-    clockOut: "2026-06-22T00:15:00",
-  },
-];
+// sample initial time entries removed (not used)
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "outline" | "danger";
@@ -227,23 +232,62 @@ function SelectInput(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 
 export default function GuardWorkforceSystem(): React.ReactElement {
   const [page, setPage] = useState<string>("events");
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
-  const [events, setEvents] = useState<EventItem[]>(initialEvents);
-  const [timeEntries, setTimeEntries] =
-    useState<TimeEntry[]>(initialTimeEntries);
+
+  const router = useRouter();
+
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+
+  async function logout() {
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
+
+  //   <Button variant="outline" onClick={logout}>
+  //     Logout
+  //   </Button>;
+
+  useEffect(() => {
+    loadEmployees();
+  }, []);
+
+  async function loadEmployees() {
+    const { data, error } = await supabase
+      .from("employees")
+      .select("*")
+      .order("first_name");
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setEmployees(
+      (data || []).map((e: Record<string, unknown>) => ({
+        id: String(e["id"] ?? ""),
+        firstName: String(e["first_name"] ?? ""),
+        lastName: String(e["last_name"] ?? ""),
+        employeeType: String(e["employee_type"] ?? ""),
+        employer: String(e["employer"] ?? ""),
+        gender: String(e["gender"] ?? ""),
+        license: String(e["license"] ?? ""),
+        licenseExpiration: String(e["license_expiration"] ?? ""),
+        phone: String(e["phone"] ?? ""),
+        email: String(e["email"] ?? ""),
+        hourlyRate: Number(e["hourly_rate"] ?? 0),
+      })),
+    );
+  }
+
   const [selectedEventId, setSelectedEventId] = useState<number>(
     initialEvents[0].id,
   );
   const [search, setSearch] = useState<string>("");
 
-  const [newEmployee, setNewEmployee] = useState<{
-    name: string;
-    license: string;
-    phone: string;
-    email: string;
-    hourlyRate: string;
-  }>({
-    name: "",
+  const [newEmployee, setNewEmployee] = useState({
+    firstName: "",
+    lastName: "",
     license: "",
     phone: "",
     email: "",
@@ -272,7 +316,7 @@ export default function GuardWorkforceSystem(): React.ReactElement {
   );
 
   function getEmployee(id: number | string): Employee | undefined {
-    return employees.find((employee) => employee.id === Number(id));
+    return employees.find((employee) => employee.id === String(id));
   }
 
   // getEvent removed; use events array directly where needed
@@ -286,22 +330,79 @@ export default function GuardWorkforceSystem(): React.ReactElement {
     return timeEntries.find(
       (entry) =>
         entry.eventId === Number(eventId) &&
-        entry.employeeId === Number(employeeId),
+        entry.employeeId === String(employeeId),
     );
   }
 
-  function addEmployee(): void {
-    if (!newEmployee.name.trim()) return;
-    setEmployees((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        ...newEmployee,
-        hourlyRate: Number(newEmployee.hourlyRate || 0),
-      },
-    ]);
+  async function importEmployeesFromFile(file: File) {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer);
+
+    const rows: Record<string, unknown>[] = [];
+
+    workbook.SheetNames.forEach((sheetName) => {
+      if (sheetName.toUpperCase() === "INACTIVE") return;
+
+      const sheet = workbook.Sheets[sheetName];
+      const sheetRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+        sheet,
+        {
+          defval: "",
+        },
+      );
+
+      rows.push(...sheetRows);
+    });
+
+    const employeesToInsert = rows
+      .map((row) => ({
+        employee_type: String(row["EMPLOYEE TYPE"] || "").trim(),
+        employer: String(row["EMPLOYER"] || "").trim(),
+        gender: String(row["GENDER"] || "").trim(),
+        first_name: String(row["FIRST NAME"] || "").trim(),
+        last_name: String(row["LAST NAME"] || "").trim(),
+        email: String(row["EMAIL ADDRESS"] || "").trim(),
+        phone: String(row["PHONE NUMBER"] || "").trim(),
+        license: String(row["LICENSE #"] || "").trim(),
+        license_expiration: String(row["LICENSE EXPIRATION"] || "").trim(),
+        hourly_rate: Number(row["PAYRATE"] || 0),
+      }))
+      .filter((employee) => employee.first_name || employee.last_name);
+
+    const { error } = await supabase
+      .from("employees")
+      .insert(employeesToInsert);
+
+    if (error) {
+      console.error(error);
+      alert("Import failed.");
+      return;
+    }
+
+    await loadEmployees();
+    alert(`${employeesToInsert.length} employees imported successfully.`);
+  }
+
+  async function addEmployee() {
+    const { error } = await supabase.from("employees").insert({
+      first_name: newEmployee.firstName,
+      last_name: newEmployee.lastName,
+      license: newEmployee.license,
+      phone: newEmployee.phone,
+      email: newEmployee.email,
+      hourly_rate: Number(newEmployee.hourlyRate),
+    });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    await loadEmployees();
+
     setNewEmployee({
-      name: "",
+      firstName: "",
+      lastName: "",
       license: "",
       phone: "",
       email: "",
@@ -310,7 +411,7 @@ export default function GuardWorkforceSystem(): React.ReactElement {
   }
 
   function updateEmployee(
-    id: number,
+    id: string,
     field: keyof Employee | "hourlyRate",
     value: string | number,
   ): void {
@@ -347,10 +448,10 @@ export default function GuardWorkforceSystem(): React.ReactElement {
     setEvents((prev) =>
       prev.map((event) => {
         if (event.id !== Number(eventId)) return event;
-        if (event.scheduledGuardIds.includes(Number(employeeId))) return event;
+        if (event.scheduledGuardIds.includes(String(employeeId))) return event;
         return {
           ...event,
-          scheduledGuardIds: [...event.scheduledGuardIds, Number(employeeId)],
+          scheduledGuardIds: [...event.scheduledGuardIds, String(employeeId)],
         };
       }),
     );
@@ -366,7 +467,7 @@ export default function GuardWorkforceSystem(): React.ReactElement {
           ? {
               ...event,
               scheduledGuardIds: event.scheduledGuardIds.filter(
-                (id) => id !== Number(employeeId),
+                (id) => id !== String(employeeId),
               ),
             }
           : event,
@@ -386,7 +487,7 @@ export default function GuardWorkforceSystem(): React.ReactElement {
       {
         id: Date.now(),
         eventId: Number(eventId),
-        employeeId: Number(employeeId),
+        employeeId: String(employeeId),
         clockIn: new Date().toISOString(),
         clockOut: null,
       },
@@ -400,7 +501,7 @@ export default function GuardWorkforceSystem(): React.ReactElement {
     setTimeEntries((prev) =>
       prev.map((entry) =>
         entry.eventId === Number(eventId) &&
-        entry.employeeId === Number(employeeId) &&
+        entry.employeeId === String(employeeId) &&
         entry.clockIn &&
         !entry.clockOut
           ? { ...entry, clockOut: new Date().toISOString() }
@@ -426,7 +527,9 @@ export default function GuardWorkforceSystem(): React.ReactElement {
         const hours = calculateHours(entry.clockIn, entry.clockOut);
         const rate = employee?.hourlyRate || 0;
         return {
-          employeeName: employee?.name || "Unknown",
+          employeeName: employee
+            ? `${employee.firstName} ${employee.lastName}`.trim()
+            : "Unknown",
           license: employee?.license || "",
           eventName: evt?.name || "Unknown Event",
           eventDate: evt?.date || "",
@@ -522,6 +625,11 @@ export default function GuardWorkforceSystem(): React.ReactElement {
               Events, employee rates, guard clock-in/out, and automatic payout
               reports.
             </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={logout}>
+              Logout
+            </Button>
           </div>
         </div>
 
@@ -655,7 +763,7 @@ export default function GuardWorkforceSystem(): React.ReactElement {
                               </option>
                               {employees.map((employee) => (
                                 <option key={employee.id} value={employee.id}>
-                                  {employee.name}
+                                  {getFullName(employee)}
                                 </option>
                               ))}
                             </SelectInput>
@@ -682,7 +790,9 @@ export default function GuardWorkforceSystem(): React.ReactElement {
                                 return (
                                   <tr key={guardId} className="border-t">
                                     <td className="p-3 font-medium">
-                                      {employee?.name}
+                                      {employee
+                                        ? `${employee.firstName} ${employee.lastName}`.trim()
+                                        : ""}
                                     </td>
                                     <td className="p-3">{employee?.license}</td>
                                     <td className="p-3">
@@ -730,17 +840,49 @@ export default function GuardWorkforceSystem(): React.ReactElement {
         {page === "employees" && (
           <div className="space-y-5">
             <Card>
+              <div className="mb-4">
+                <label className="mb-2 block text-sm font-medium">
+                  Import Employee CSV / Excel File
+                </label>
+
+                <input
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) importEmployeesFromFile(file);
+                  }}
+                  className="rounded-xl border border-slate-300 bg-white p-2 text-sm"
+                />
+              </div>
+            </Card>
+            <Card>
               <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold">
                 <UserPlus size={20} /> Add Employee / Guard Information
               </h2>
               <div className="grid gap-3 md:grid-cols-6">
                 <TextInput
-                  placeholder="Full name"
-                  value={newEmployee.name}
+                  placeholder="First Name"
+                  value={newEmployee.firstName}
                   onChange={(e) =>
-                    setNewEmployee({ ...newEmployee, name: e.target.value })
+                    setNewEmployee({
+                      ...newEmployee,
+                      firstName: e.target.value,
+                    })
                   }
                 />
+
+                <TextInput
+                  placeholder="Last Name"
+                  value={newEmployee.lastName}
+                  onChange={(e) =>
+                    setNewEmployee({
+                      ...newEmployee,
+                      lastName: e.target.value,
+                    })
+                  }
+                />
+
                 <TextInput
                   placeholder="License #"
                   value={newEmployee.license}
@@ -801,7 +943,7 @@ export default function GuardWorkforceSystem(): React.ReactElement {
                   <tbody>
                     {employees
                       .filter((employee) =>
-                        `${employee.name} ${employee.license} ${employee.email}`
+                        `${getFullName(employee)} ${employee.license} ${employee.email}`
                           .toLowerCase()
                           .includes(search.toLowerCase()),
                       )
@@ -809,11 +951,24 @@ export default function GuardWorkforceSystem(): React.ReactElement {
                         <tr key={employee.id} className="border-t">
                           <td className="p-3">
                             <TextInput
-                              value={employee.name}
+                              value={employee.firstName}
                               onChange={(e) =>
                                 updateEmployee(
                                   employee.id,
-                                  "name",
+                                  "firstName",
+                                  e.target.value,
+                                )
+                              }
+                            />
+                          </td>
+
+                          <td className="p-3">
+                            <TextInput
+                              value={employee.lastName}
+                              onChange={(e) =>
+                                updateEmployee(
+                                  employee.id,
+                                  "lastName",
                                   e.target.value,
                                 )
                               }
@@ -921,7 +1076,11 @@ export default function GuardWorkforceSystem(): React.ReactElement {
                     );
                     return (
                       <tr key={guardId} className="border-t">
-                        <td className="p-3 font-medium">{employee?.name}</td>
+                        <td className="p-3 font-medium">
+                          {employee
+                            ? `${employee.firstName} ${employee.lastName}`
+                            : ""}
+                        </td>
                         <td className="p-3">{employee?.license}</td>
                         <td className="p-3">{money(employee?.hourlyRate)}</td>
                         <td className="p-3">
