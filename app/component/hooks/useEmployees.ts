@@ -5,6 +5,33 @@ import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase/client";
 import type { Employee } from "../types";
 
+function getCell(row: Record<string, unknown>, possibleHeaders: string[]) {
+  const normalizedRow: Record<string, unknown> = {};
+
+  Object.keys(row).forEach((key) => {
+    normalizedRow[key.trim().toUpperCase()] = row[key];
+  });
+
+  for (const header of possibleHeaders) {
+    const value = normalizedRow[header.trim().toUpperCase()];
+
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function parseMoneyValue(value: unknown) {
+  const cleaned = String(value ?? "")
+    .replace("$", "")
+    .replace(",", "")
+    .trim();
+
+  return Number(cleaned || 0);
+}
+
 export function useEmployees() {
   const [employees, setEmployees] = useState<Employee[]>([]);
 
@@ -110,25 +137,38 @@ export function useEmployees() {
       });
 
       rows.push(...sheetRows);
+
+      console.log("HEADERS FOUND:", Object.keys(sheetRows[0] || {}));
+console.log("FIRST ROW:", sheetRows[0]);
+
     });
 
-    const employeesToInsert = rows
-      .map((row) => ({
-        employee_type: String(row["EMPLOYEE TYPE"] || "").trim(),
-        employer: String(row["EMPLOYER"] || "").trim(),
-        gender: String(row["GENDER"] || "").trim(),
-        first_name: String(row["FIRST NAME"] || "").trim(),
-        last_name: String(row["LAST NAME"] || "").trim(),
-        email: String(row["EMAIL ADDRESS"] || row["EMAIL"] || "").trim(),
-        phone: String(row["PHONE NUMBER"] || row["PHONE"] || "").trim(),
-        license: String(row["LICENSE #"] || row["LICENSE"] || "").trim(),
-        license_expiration: String(row["LICENSE EXPIRATION"] || "").trim(),
-        hourly_rate: Number(
-          row["PAYRATE"] || row["PAY RATE"] || row["HOURLY RATE"] || 0,
-        ),
-      }))
-      .filter((employee) => employee.first_name || employee.last_name);
+    
 
+    const employeesToInsert = rows
+  .map((row) => ({
+    employee_type: String(getCell(row, ["EMPLOYEE TYPE", "EMPLOYEE TYE", "TYPE"])).trim(),
+    employer: String(getCell(row, ["EMPLOYER", "COMPANY"])).trim(),
+    gender: String(getCell(row, ["GENDER"])).trim(),
+    first_name: String(getCell(row, ["FIRST NAME", "FIRSTNAME"])).trim(),
+    last_name: String(getCell(row, ["LAST NAME", "LASTNAME"])).trim(),
+    email: String(getCell(row, ["EMAIL ADDRESS", "EMAIL"])).trim(),
+    phone: String(getCell(row, ["PHONE NUMBER", "PHONE", "PHONE #"])).trim(),
+    license: String(getCell(row, ["LICENSE #", "LICENSE", "LICENCE #", "LICENCE"])).trim(),
+    license_expiration: String(getCell(row, ["LICENSE EXPIRATION", "LICENCE EXPIRATION", "LICENSE EXPIRY"])).trim(),
+    hourly_rate: parseMoneyValue(
+      getCell(row, [
+        "PAYRATE",
+        "PAY RATE",
+        "HOURLY RATE",
+        "RATE",
+        "SALARY",
+        "WAGE",
+        "HOURLY WAGE",
+      ]),
+    ),
+  }))
+  .filter((employee) => employee.first_name || employee.last_name);
     const { error } = await supabase.from("employees").insert(employeesToInsert);
 
     if (error) {
