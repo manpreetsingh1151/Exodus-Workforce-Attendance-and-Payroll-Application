@@ -1,14 +1,8 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
-// import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { useRouter } from "next/navigation";
-
-function getFullName(employee: Employee): string {
-  return `${employee.firstName} ${employee.lastName}`.trim();
-}
-
 import {
   CalendarDays,
   Clock,
@@ -18,6 +12,10 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
+
+function getFullName(employee: Employee): string {
+  return `${employee.firstName} ${employee.lastName}`.trim();
+}
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "—";
@@ -97,7 +95,7 @@ interface Employee {
 }
 
 interface EventItem {
-  id: number;
+  id: string;
   name: string;
   date: string;
   location: string;
@@ -106,8 +104,8 @@ interface EventItem {
 }
 
 interface TimeEntry {
-  id: number;
-  eventId: number;
+  id: string;
+  eventId: string;
   employeeId: string;
   clockIn: string | null;
   clockOut: string | null;
@@ -124,62 +122,6 @@ type PayrollRow = {
   rate: number;
   payout: number;
 };
-
-// const initialEmployees: Employee[] = [
-//   {
-//     id: 1,
-//     name: "Varun Bhanot",
-//     license: "11151199",
-//     phone: "416-555-0101",
-//     email: "varun@example.com",
-//     hourlyRate: 25,
-//   },
-//   {
-//     id: 2,
-//     name: "Kyle Johnson",
-//     license: "11153510",
-//     phone: "647-555-0155",
-//     email: "kyle@example.com",
-//     hourlyRate: 27,
-//   },
-//   {
-//     id: 3,
-//     name: "Saurav Whalla",
-//     license: "11468460",
-//     phone: "905-555-0198",
-//     email: "saurav@example.com",
-//     hourlyRate: 25,
-//   },
-// ];
-
-const initialEvents: EventItem[] = [
-  {
-    id: 101,
-    name: "Rogers Stadium Event",
-    date: "2026-06-28",
-    location: "105 Carl Hall Rd, North York",
-    status: "upcoming",
-    scheduledGuardIds: ["1", "2", "3"],
-  },
-  {
-    id: 102,
-    name: "FIFA Fan Fest",
-    date: "2026-06-24",
-    location: "660 Fleet Street, Toronto",
-    status: "current",
-    scheduledGuardIds: ["1", "3"],
-  },
-  {
-    id: 103,
-    name: "Electric Island",
-    date: "2026-06-21",
-    location: "Toronto, ON",
-    status: "past",
-    scheduledGuardIds: ["2"],
-  },
-];
-
-// sample initial time entries removed (not used)
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "outline" | "danger";
@@ -244,14 +186,6 @@ export default function GuardWorkforceSystem(): React.ReactElement {
     router.push("/login");
   }
 
-  //   <Button variant="outline" onClick={logout}>
-  //     Logout
-  //   </Button>;
-
-  useEffect(() => {
-    loadEmployees();
-  }, []);
-
   async function loadEmployees() {
     const { data, error } = await supabase
       .from("employees")
@@ -280,9 +214,7 @@ export default function GuardWorkforceSystem(): React.ReactElement {
     );
   }
 
-  const [selectedEventId, setSelectedEventId] = useState<number>(
-    initialEvents[0].id,
-  );
+  const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [search, setSearch] = useState<string>("");
 
   const [newEmployee, setNewEmployee] = useState({
@@ -311,9 +243,18 @@ export default function GuardWorkforceSystem(): React.ReactElement {
     end: "2026-06-30",
   });
 
-  const selectedEvent = events.find(
-    (event) => event.id === Number(selectedEventId),
-  );
+  const selectedEvent = events.find((event) => event.id === selectedEventId);
+
+  useEffect(() => {
+    async function init() {
+      await loadEmployees();
+      await loadEvents();
+      await loadTimeEntries();
+    }
+
+    init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function getEmployee(id: number | string): Employee | undefined {
     return employees.find((employee) => employee.id === String(id));
@@ -329,7 +270,7 @@ export default function GuardWorkforceSystem(): React.ReactElement {
   ): TimeEntry | undefined {
     return timeEntries.find(
       (entry) =>
-        entry.eventId === Number(eventId) &&
+        entry.eventId === String(eventId) &&
         entry.employeeId === String(employeeId),
     );
   }
@@ -410,105 +351,227 @@ export default function GuardWorkforceSystem(): React.ReactElement {
     });
   }
 
-  function updateEmployee(
+  async function updateEmployee(
     id: string,
-    field: keyof Employee | "hourlyRate",
+    field: keyof Employee,
     value: string | number,
-  ): void {
-    setEmployees((prev) =>
-      prev.map((employee) =>
-        employee.id === id
-          ? {
-              ...employee,
-              [field]: field === "hourlyRate" ? Number(value || 0) : value,
-            }
-          : employee,
-      ),
-    );
+  ) {
+    const dbField: Record<string, string> = {
+      firstName: "first_name",
+      lastName: "last_name",
+      employeeType: "employee_type",
+      employer: "employer",
+      gender: "gender",
+      license: "license",
+      licenseExpiration: "license_expiration",
+      phone: "phone",
+      email: "email",
+      hourlyRate: "hourly_rate",
+    };
+
+    await supabase
+      .from("employees")
+      .update({
+        [dbField[field]]: field === "hourlyRate" ? Number(value) : value,
+      })
+      .eq("id", id);
+
+    await loadEmployees();
   }
 
-  function addEvent(): void {
+  // function addEvent(): void {
+  //   if (!newEvent.name.trim() || !newEvent.date) return;
+  //   setEvents((prev) => [
+  //     ...prev,
+  //     {
+  //       id: Date.now(),
+  //       ...newEvent,
+  //       scheduledGuardIds: [],
+  //     },
+  //   ]);
+  //   setNewEvent({ name: "", date: "", location: "", status: "upcoming" });
+  // }
+
+  async function loadEvents() {
+    const { data, error } = await supabase
+      .from("events")
+      .select(
+        `
+      *,
+      event_guards (
+        employee_id
+      )
+    `,
+      )
+      .order("event_date", { ascending: true });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const mappedEvents: EventItem[] = (data || []).map((event) => ({
+      id: String(event.id),
+      name: event.name || "",
+      date: event.event_date || "",
+      location: event.location || "",
+      status: event.status || "upcoming",
+      scheduledGuardIds: (event.event_guards || []).map(
+        (row: { employee_id: string }) => row.employee_id,
+      ),
+    }));
+
+    setEvents(mappedEvents);
+
+    if (!selectedEventId && mappedEvents.length > 0) {
+      setSelectedEventId(mappedEvents[0].id);
+    }
+  }
+
+  async function addEvent() {
     if (!newEvent.name.trim() || !newEvent.date) return;
-    setEvents((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        ...newEvent,
-        scheduledGuardIds: [],
-      },
-    ]);
-    setNewEvent({ name: "", date: "", location: "", status: "upcoming" });
+
+    const { error } = await supabase.from("events").insert({
+      name: newEvent.name,
+      event_date: newEvent.date,
+      location: newEvent.location,
+      status: newEvent.status,
+    });
+
+    if (error) {
+      console.error(error);
+      alert("Failed to add event.");
+      return;
+    }
+
+    await loadEvents();
+
+    setNewEvent({
+      name: "",
+      date: "",
+      location: "",
+      status: "upcoming",
+    });
   }
 
-  function assignGuard(
-    eventId: number | string,
-    employeeId: number | string | undefined,
-  ): void {
+  async function assignGuard(eventId: string, employeeId: string | undefined) {
     if (!employeeId) return;
-    setEvents((prev) =>
-      prev.map((event) => {
-        if (event.id !== Number(eventId)) return event;
-        if (event.scheduledGuardIds.includes(String(employeeId))) return event;
-        return {
-          ...event,
-          scheduledGuardIds: [...event.scheduledGuardIds, String(employeeId)],
-        };
-      }),
+
+    const { data: existingData, error: existsError } = await supabase
+      .from("event_guards")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("employee_id", employeeId)
+      .maybeSingle();
+
+    if (existsError) {
+      console.error(existsError);
+      return;
+    }
+
+    if (existingData) return;
+
+    const { error } = await supabase.from("event_guards").insert({
+      event_id: eventId,
+      employee_id: employeeId,
+    });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    await loadEvents();
+  }
+
+  async function removeGuardFromEvent(eventId: string, employeeId: string) {
+    const { error } = await supabase
+      .from("event_guards")
+      .delete()
+      .eq("event_id", eventId)
+      .eq("employee_id", employeeId);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    await loadEvents();
+  }
+
+  async function clockIn(eventId: string, employeeId: string) {
+    // const existing = getEntry(eventId, employeeId);
+    // if (existing?.clockIn && !existing?.clockOut) return;
+    const { data } = await supabase
+      .from("time_entries")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("employee_id", employeeId)
+      .is("clock_out", null)
+      .maybeSingle();
+
+    if (data) return;
+
+    const { error } = await supabase.from("time_entries").insert({
+      event_id: eventId,
+      employee_id: employeeId,
+      clock_in: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    await loadTimeEntries();
+  }
+  async function clockOut(eventId: string, employeeId: string) {
+    const entry = getEntry(eventId, employeeId);
+    if (!entry) return;
+
+    const { error } = await supabase
+      .from("time_entries")
+      .update({
+        clock_out: new Date().toISOString(),
+      })
+      .eq("id", entry.id);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    await loadTimeEntries();
+  }
+  async function loadTimeEntries() {
+    const { data, error } = await supabase.from("time_entries").select("*");
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setTimeEntries(
+      (data || []).map((entry) => ({
+        id: String(entry.id),
+        eventId: String(entry.event_id),
+        employeeId: String(entry.employee_id),
+        clockIn: entry.clock_in,
+        clockOut: entry.clock_out,
+      })),
     );
   }
 
-  function removeGuardFromEvent(
-    eventId: number | string,
-    employeeId: number | string,
-  ): void {
-    setEvents((prev) =>
-      prev.map((event) =>
-        event.id === Number(eventId)
-          ? {
-              ...event,
-              scheduledGuardIds: event.scheduledGuardIds.filter(
-                (id) => id !== String(employeeId),
-              ),
-            }
-          : event,
-      ),
-    );
-  }
-
-  function clockIn(
-    eventId: number | string,
-    employeeId: number | string,
-  ): void {
-    const existing = getEntry(eventId, employeeId);
-    if (existing?.clockIn) return;
-
-    setTimeEntries((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        eventId: Number(eventId),
-        employeeId: String(employeeId),
-        clockIn: new Date().toISOString(),
-        clockOut: null,
-      },
-    ]);
-  }
-
-  function clockOut(
-    eventId: number | string,
-    employeeId: number | string,
-  ): void {
-    setTimeEntries((prev) =>
-      prev.map((entry) =>
-        entry.eventId === Number(eventId) &&
-        entry.employeeId === String(employeeId) &&
-        entry.clockIn &&
-        !entry.clockOut
-          ? { ...entry, clockOut: new Date().toISOString() }
-          : entry,
-      ),
-    );
-  }
+  //   setTimeEntries(
+  //     (data || []).map((entry) => ({
+  //       id: String(entry.id),
+  //       eventId: String(entry.event_id),
+  //       employeeId: String(entry.employee_id),
+  //       clockIn: entry.clock_in,
+  //       clockOut: entry.clock_out,
+  //     }))
+  //   );
+  // }
 
   const payrollRows = useMemo<PayrollRow[]>(() => {
     const start = new Date(payWindow.start + "T00:00:00");
@@ -1043,7 +1106,7 @@ export default function GuardWorkforceSystem(): React.ReactElement {
               </div>
               <SelectInput
                 value={selectedEventId}
-                onChange={(e) => setSelectedEventId(Number(e.target.value))}
+                onChange={(e) => setSelectedEventId(e.target.value)}
               >
                 {events.map((event) => (
                   <option key={event.id} value={event.id}>
