@@ -13,6 +13,19 @@ export function formatDate(value?: string | null) {
   });
 }
 
+export function roundToNearestQuarterHour(date = new Date()): string {
+  const rounded = new Date(date);
+
+  const minutes = rounded.getMinutes();
+  const roundedMinutes = Math.round(minutes / 15) * 15;
+
+  rounded.setMinutes(roundedMinutes);
+  rounded.setSeconds(0);
+  rounded.setMilliseconds(0);
+
+  return rounded.toISOString();
+}
+
 export function formatDateTime(value?: string | null) {
   if (!value) return "—";
   return new Date(value).toLocaleString("en-US", {

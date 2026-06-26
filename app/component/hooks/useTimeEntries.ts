@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { TimeEntry } from "../types";
+import { roundToNearestQuarterHour } from "../utils/format";
+
+
 
 export function useTimeEntries() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
@@ -46,7 +49,8 @@ export function useTimeEntries() {
     const { error } = await supabase.from("time_entries").insert({
       event_id: eventId,
       employee_id: employeeId,
-      clock_in: new Date().toISOString(),
+      // clock_in: new Date().toISOString(),
+      clock_in: roundToNearestQuarterHour(),
     });
 
     if (error) {
@@ -64,7 +68,8 @@ export function useTimeEntries() {
     const { error } = await supabase
       .from("time_entries")
       .update({
-        clock_out: new Date().toISOString(),
+        // clock_out: new Date().toISOString(),
+        clock_out: roundToNearestQuarterHour(),
       })
       .eq("id", entry.id);
 
@@ -76,11 +81,56 @@ export function useTimeEntries() {
     await loadTimeEntries();
   }
 
+  async function updateTimeEntry(
+  entryId: string,
+  clockIn: string | null,
+  clockOut: string | null,
+) {
+  const { error } = await supabase
+    .from("time_entries")
+    .update({
+      clock_in: clockIn,
+      clock_out: clockOut,
+    })
+    .eq("id", entryId);
+
+  if (error) {
+    console.error(error);
+    alert("Failed to update time entry.");
+    return;
+  }
+
+  await loadTimeEntries();
+}
+
+//   async function updateTimeEntry(
+//   entryId: string,
+//   clockIn: string | null,
+//   clockOut: string | null,
+// ) {
+//   const { error } = await supabase
+//     .from("time_entries")
+//     .update({
+//       clock_in: clockIn || null,
+//       clock_out: clockOut || null,
+//     })
+//     .eq("id", entryId);
+
+//   if (error) {
+//     console.error(error);
+//     alert("Failed to update time entry.");
+//     return;
+//   }
+
+//   await loadTimeEntries();
+// }
+
   return {
-    timeEntries,
-    loadTimeEntries,
-    getEntry,
-    clockIn,
-    clockOut,
-  };
+  timeEntries,
+  loadTimeEntries,
+  getEntry,
+  clockIn,
+  clockOut,
+  updateTimeEntry,
+};
 }

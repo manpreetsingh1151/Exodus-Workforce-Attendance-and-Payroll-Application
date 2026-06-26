@@ -17,7 +17,27 @@ type Props = {
   timeEntries: TimeEntry[];
   payWindow: PayWindow;
   setPayWindow: React.Dispatch<React.SetStateAction<PayWindow>>;
+  updateTimeEntry: (
+  entryId: string,
+  clockIn: string | null,
+  clockOut: string | null,
+) => Promise<void>;
 };
+
+function toDateTimeLocalValue(value: string | null | undefined) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - offset * 60 * 1000);
+
+  return localDate.toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocalValue(value: string) {
+  if (!value) return null;
+  return new Date(value).toISOString();
+}
 
 export default function PayoutsPage({
   employees,
@@ -25,6 +45,7 @@ export default function PayoutsPage({
   timeEntries,
   payWindow,
   setPayWindow,
+  updateTimeEntry,
 }: Props) {
   const payrollRows: PayrollRow[] = timeEntries
     .filter((entry) => {
@@ -45,6 +66,7 @@ export default function PayoutsPage({
       const rate = employee?.hourlyRate || 0;
 
       return {
+        entryId: entry.id,
         employeeName: employee
           ? `${employee.firstName} ${employee.lastName}`.trim()
           : "Unknown",
@@ -219,8 +241,40 @@ export default function PayoutsPage({
                   <td className="p-3 font-medium">{row.employeeName}</td>
                   <td className="p-3">{row.eventName}</td>
                   <td className="p-3">{formatDate(row.eventDate)}</td>
-                  <td className="p-3">{formatDateTime(row.clockIn)}</td>
-                  <td className="p-3">{formatDateTime(row.clockOut)}</td>
+
+                  {/* <td className="p-3">{formatDateTime(row.clockIn)}</td>
+                  <td className="p-3">{formatDateTime(row.clockOut)}</td> */}
+
+                  <td className="p-3">
+  <input
+    type="datetime-local"
+    value={toDateTimeLocalValue(row.clockIn)}
+    onChange={(e) =>
+      updateTimeEntry(
+        row.entryId,
+        fromDateTimeLocalValue(e.target.value),
+        row.clockOut,
+      )
+    }
+    className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+  />
+</td>
+
+<td className="p-3">
+  <input
+    type="datetime-local"
+    value={toDateTimeLocalValue(row.clockOut)}
+    onChange={(e) =>
+      updateTimeEntry(
+        row.entryId,
+        row.clockIn,
+        fromDateTimeLocalValue(e.target.value),
+      )
+    }
+    className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+  />
+</td>
+
                   <td className="p-3">{row.hours.toFixed(2)}</td>
                   <td className="p-3">{money(row.rate)}</td>
                   <td className="p-3 font-semibold">{money(row.payout)}</td>

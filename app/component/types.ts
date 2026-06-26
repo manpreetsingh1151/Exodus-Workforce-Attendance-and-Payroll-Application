@@ -30,6 +30,7 @@ export interface TimeEntry {
 }
 
 export type PayrollRow = {
+  entryId: string;
   employeeName: string;
   license: string;
   eventName: string;

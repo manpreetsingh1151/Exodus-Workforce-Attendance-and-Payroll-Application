@@ -69,6 +69,7 @@ export default function GuardWorkforceSystem() {
     loadTimeEntries,
     clockIn,
     clockOut,
+    updateTimeEntry,
   } = useTimeEntries();
 
   useEffect(() => {
@@ -146,17 +147,19 @@ export default function GuardWorkforceSystem() {
             timeEntries={timeEntries}
             clockIn={clockIn}
             clockOut={clockOut}
+            updateTimeEntry={updateTimeEntry}
           />
         )}
 
         {page === "payouts" && (
           <PayoutsPage
-            employees={employees}
-            events={events}
-            timeEntries={timeEntries}
-            payWindow={payWindow}
-            setPayWindow={setPayWindow}
-          />
+  employees={employees}
+  events={events}
+  timeEntries={timeEntries}
+  payWindow={payWindow}
+  setPayWindow={setPayWindow}
+  updateTimeEntry={updateTimeEntry}
+/>
         )}
       </div>
     </div>
